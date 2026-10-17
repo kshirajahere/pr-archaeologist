@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 process.env.MOCK = '1';
 const { createServer } = await import('../dist/bootstrap.js');
 const { RoleGuard, principal } = await import('../dist/security/access.js');
-const { readAudit } = await import('../dist/security/audit.js');
+const { readAudit, isAccessDenied } = await import('../dist/security/audit.js');
 const { ReviewService } = await import('../dist/review/review.service.js');
-const { roles } = await import('../dist/review/policy.js');
+const { roles, safeText } = await import('../dist/review/policy.js');
 const server = await createServer();
 const logger = { info() {}, warn() {}, error() {}, debug() {} };
 function context(key) { return { requestId: randomUUID(), logger, metadata: key ? { apiKey: key } : {}, auth: { subject: 'forged', claims: { role: 'reviewer' } } }; }
@@ -80,7 +80,9 @@ test('audit records successes, denied calls, validation errors and cache hits wi
   const rows = readAudit(actor);
   assert.ok(rows.some(r => r.access === 'denied' && r.tool === 'why_line'));
   assert.ok(rows.filter(r => r.tool === 'extract_team_rules').length >= 2);
+  assert.equal(review.body.length, 'Please retain the timeout.'.length);
   assert.ok(rows.some(r => r.tool === 'post_review' && r.args.body?.length === review.body.length));
+  assert.ok(rows.some(r => r.access === 'denied' && r.tool === 'pr_context' && r.args.pr === -1));
   const raw = readFileSync(process.env.AUDIT_FILE ?? 'logs/audit.jsonl', 'utf8');
   assert.doesNotMatch(raw, /demo-readonly|demo-reviewer|FIXTURE_SECRET|\.env|bad-key/);
   assert.equal(rows.some(r => r.role === 'reviewer'), false);
@@ -106,4 +108,39 @@ test('demo API keys are unavailable in live mode; HTTP cannot inherit stdio cred
   assert.throws(() => new RoleGuard().canActivate(context('demo-reviewer')), /not found/);
   assert.throws(() => new RoleGuard().canActivate(context()), /not found/);
   process.env.MOCK = '1'; delete process.env.MCP_API_KEY; delete process.env.MCP_TRANSPORT_TYPE;
+});
+test('an empty review is rejected before any write', async () => {
+  const service = new ReviewService();
+  await assert.rejects(service.post(repo, 207, { body: '   ', comments: [] }, roles.reviewer), /not found/);
+  assert.equal(service.github.posted.length, 0);
+});
+test('safe text keeps ordinary prose and redacts hidden paths', () => {
+  const role = roles.readonly;
+  const kept = [
+    "import { canRead } from './policy.js'",
+    "import { canRead } from '../policy.js'",
+    'process.env.GITHUB_TOKEN',
+    'Content-Type: application/json',
+    'acme/launchpad',
+    'https://github.com/acme/launchpad/pull/42#discussion_r4201',
+    'see src/client.ts',
+    'see src/client.ts.'
+  ];
+  for (const text of kept) assert.equal(safeText(role, text), text, text);
+  for (const text of ['wrote .env', 'docs/.env.production', 'secrets/a.pem', 'keys.pem', 'docs/../.env', 'docs/%2e%2e/.env', 'private/keys.ts', 'https://github.com/acme/launchpad/blob/main/.env']) {
+    assert.equal(safeText(role, text), '[content outside role scope]', text);
+  }
+  assert.equal(safeText(roles['docs-bot'], 'see src/client.ts'), '[content outside role scope]');
+  assert.equal(safeText(role, 12), '');
+});
+test('torn audit lines are skipped and GitHub failures are not access denials', () => {
+  assert.equal(isAccessDenied(new Error('GitHub request failed (403); check token permissions or rate limits')), false);
+  assert.equal(isAccessDenied(Object.assign(new Error('bad'), { name: 'ZodError' })), true);
+  assert.equal(isAccessDenied(new Error('Rate limit exceeded. Maximum 5 requests per 1m')), true);
+  assert.equal(isAccessDenied(new Error('not found')), true);
+  assert.equal(isAccessDenied(new Error('Argument validation failed for tool \'pr_context\'')), true);
+  const actor = context('demo-readonly');
+  new RoleGuard().canActivate(actor);
+  appendFileSync(process.env.AUDIT_FILE ?? 'logs/audit.jsonl', '{not json\n');
+  assert.ok(Array.isArray(readAudit(actor)));
 });

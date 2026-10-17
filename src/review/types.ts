@@ -40,7 +40,9 @@ export interface Issue {
   body: string;
   html_url: string;
 }
-export interface Review { user: { login: string }; state: string; html_url: string }
+export interface Review { user: { login: string }; state: string; html_url: string; body?: string; submitted_at?: string | null }
+export interface DiscussionComment { id: number; body: string; html_url: string; created_at: string; user: { login: string } }
+export interface CommitComparison { status: string; base_commit: { sha: string }; merge_base_commit: { sha: string }; files: FileChange[] }
 export interface ReviewInput {
   body: string;
   comments: { path: string; line: number; body: string }[];

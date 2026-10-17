@@ -56,7 +56,7 @@ processes are explicitly closed.
   projects, stdio, HTTP, authentication, role scope, audit and widget DOM checks.
 - `npm run demo`: eight tools complete the fixture flow, producing five cited
   draft comments and a readonly dry run. No live GitHub review was published.
-- Real GitHub MCP smoke check on `Pratz1337/strategicwm-Issue` PR #2: all eight
+- Real GitHub MCP smoke check on a separate pull request: all eight
   tools, three project resources and the prompt passed. Line provenance returned
   a real introduction commit; no supported recurring rules were found. Posting
   remained a readonly dry run. Temporary credentials were kept in process memory.
@@ -66,3 +66,22 @@ processes are explicitly closed.
 - NitroCloud reached its sign-in screen. NitroStudio GUI and a deployed remote
   MCP endpoint remain unverified. The guide-based remaining work is in
   `BUILDATHON.md`.
+
+## MCP follow-up review expansion
+
+- Added `read_pr_file`, `pr_discussion`, `pr_changes_since`, `recheck_findings`
+  and the `review-pr-update` prompt. Discovery now returns twelve tools.
+- Added eight focused follow-up tests plus stdio/HTTP coverage. The new test
+  file first failed because the service did not exist. Current workspace
+  `npm test`: 52/52 passed, including the production build and widget checks.
+- `npm run demo` exercises all twelve tools: PR-head file content, current
+  discussion, an incremental fixture diff, four saved findings still detected,
+  cited draft, readonly dry run and denied secret access.
+- Live MCP on that same pull request: all twelve tools, three
+  resources and both prompts passed. A parent-to-head comparison returned the
+  actual changed test file; reading it used the same pinned head. No live
+  GitHub review was posted. Empty live findings are integration evidence only.
+- Missing patches, redacted code, the 300-file comparison cap and diverged
+  history have explicit outcomes. A missing finding is not claimed to be fixed;
+  REST discussion reads do not claim resolved-thread state.
+- Pre-existing uncommitted core, security and widget changes were preserved.

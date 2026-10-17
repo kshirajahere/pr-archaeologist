@@ -15,6 +15,7 @@ adding more integrations.
 | MCP centrality | Discoverable tools coordinate PR patches, commit history, review threads, linked issues and team rules | stdio and HTTP integration checks; show actual tool calls using `review-like-a-senior` in NitroStudio or another MCP client |
 | Clear improvement | The diff removes a timeout; the original incident explains why it exists | Fixture PR #207 reverses #42; keep the fictional fixture label visible |
 | Actionable result | `draft_review` produces cited comments for human inspection | Drafts never post; `expected_head` rejects a draft after a PR update; readonly demonstrates a dry run |
+| Follow-up review | Read replies and surrounding code, inspect new commits and revisit saved findings | Four tools plus `review-pr-update`; missing evidence is reported and absent findings are not called fixed |
 | Reliable execution | Show the full workflow, then the role boundary | `npm test` and `npm run demo`; real GitHub integration also checked on a public PR without posting |
 | Live demo | A judge can connect to the deployed MCP URL | NitroCloud deployment and a remote retest still required; follow the README |
 

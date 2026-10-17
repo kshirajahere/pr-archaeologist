@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { ExecutionContext, NitroStackServer, z } from '@nitrostack/core';
+import type { ExecutionContext, NitroStackServer } from '@nitrostack/core';
 import { principal, RoleGuard } from './access.js';
 import { canRead, roles, type Role } from '../review/policy.js';
 
@@ -28,11 +28,17 @@ function argsFor(input: unknown, role?: Role): Record<string, unknown> {
   return result;
 }
 function logPath() { return process.env.AUDIT_FILE ?? 'logs/audit.jsonl'; }
+export function isAccessDenied(error: unknown): boolean {
+  const err = error as { name?: string; message?: string };
+  if (err?.name === 'ZodError') return true;
+  const message = typeof err?.message === 'string' ? err.message : '';
+  return message === 'not found' || /rate limit exceeded/i.test(message) || /argument validation failed/i.test(message) || /access denied/i.test(message);
+}
 export async function audited<T>(tool: string, input: unknown, ctx: ExecutionContext, work: () => Promise<T>): Promise<T> {
   let status: 'ok' | 'error' = 'ok';
   let denied = false;
   try { return await work(); }
-  catch (error) { status = 'error'; denied = (error as Error).name === 'ZodError' || /not found|limit|validation|invalid/i.test((error as Error).message); throw error; }
+  catch (error) { status = 'error'; denied = isAccessDenied(error); throw error; }
   finally {
     const actor = principal(ctx), role = actor && roles[actor.role];
     const row: AuditEntry = { time: new Date().toISOString(), request: ctx.requestId, role: actor?.role ?? 'anonymous', subject: actor?.subject ?? 'anonymous',
@@ -49,7 +55,8 @@ export function installAudit(server: NitroStackServer) {
     const execute = tool.execute.bind(tool);
     tool.execute = (input, ctx) => audited(name, input, ctx, async () => {
       new RoleGuard().canActivate(ctx);
-      const parsed = (tool.inputSchema as z.ZodType).parse(input);
+      const schema = tool.inputSchema as { parse?: (value: unknown) => unknown } | undefined;
+      const parsed = schema && typeof schema.parse === 'function' ? schema.parse(input) : input;
       return execute(parsed, ctx);
     });
   }
@@ -61,7 +68,15 @@ export function readAudit(ctx: ExecutionContext): AuditEntry[] {
   let lines: string;
   try { lines = readFileSync(logPath(), 'utf8'); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
-  return lines.split('\n').filter(Boolean).map(line => JSON.parse(line) as AuditEntry)
+  const rows: AuditEntry[] = [];
+  for (const line of lines.split('\n')) {
+    if (!line) continue;
+    try {
+      const row = JSON.parse(line) as AuditEntry;
+      if (row && typeof row === 'object') rows.push(row);
+    } catch { /* A torn final line must not hide earlier entries. */ }
+  }
+  return rows
     .filter(row => row.role === actor.role && row.subject === actor.subject)
     .slice(-200).map(row => ({ ...row, args: argsFor(row.args, roles[actor.role]) }));
 }

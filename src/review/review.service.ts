@@ -1,10 +1,62 @@
 import { Injectable, Cache } from '@nitrostack/core';
 import { createHash } from 'node:crypto';
 import { GitHub } from './github.js';
-import { diffLines, previousLine } from './diff.js';
-import { learn, violates, decisionTimeline } from './rules.js';
+import { diffLines, hasHunks, lineCount, previousLine } from './diff.js';
+import { learn, violates, decisionTimeline, type Decision } from './rules.js';
 import type { ReviewInput } from './types.js';
 import { canRead, safeText, visibleFile, type Role } from './policy.js';
+
+const CLOSING_KEYWORD = /(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?::\s*|\s+)#(\d+)/gi;
+
+export function closingIssueNumbers(text: string | null | undefined, repo: string): number[] {
+  if (typeof text !== 'string' || !text || typeof repo !== 'string' || !repo) return [];
+  const numbers: number[] = [];
+  for (const match of text.matchAll(CLOSING_KEYWORD)) numbers.push(Number(match[1]));
+  const owner = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const match of text.matchAll(new RegExp(`https://github\\.com/${owner}/(?:issues|pull)/(\\d+)\\b`, 'gi'))) numbers.push(Number(match[1]));
+  return [...new Set(numbers)];
+}
+
+function pairedReplacement(patch: string, current: string): string | undefined {
+  const wanted = current.trim();
+  if (!wanted || wanted.includes('```')) return;
+  const rows = diffLines(patch);
+  for (let index = 0; index < rows.length - 1; index++) {
+    const row = rows[index];
+    const next = rows[index + 1];
+    if (row.kind !== 'remove' || next.kind !== 'add' || row.text.trim() !== wanted) continue;
+    if (!next.text.trim() || next.text.trim() === wanted || next.text.includes('```')) continue;
+    return next.text;
+  }
+}
+
+function historicalReplacement(current: string, sourcePr: number | undefined, path: string, decisions: Decision[]): string | undefined {
+  const ranked = [
+    ...decisions.filter(decision => decision.pr === sourcePr).flatMap(decision => decision.files.filter(file => file.path === path)),
+    ...decisions.filter(decision => decision.pr === sourcePr).flatMap(decision => decision.files.filter(file => file.path !== path)),
+    ...decisions.filter(decision => decision.pr !== sourcePr).flatMap(decision => decision.files.filter(file => file.path === path)),
+    ...decisions.filter(decision => decision.pr !== sourcePr).flatMap(decision => decision.files.filter(file => file.path !== path))
+  ];
+  for (const file of ranked) {
+    const replacement = pairedReplacement(file.patch, current);
+    if (replacement) return replacement;
+  }
+}
+
+function attachSuggestion(role: Role, body: string, replacement?: string): string {
+  if (!replacement || safeText(role, replacement) !== replacement) return body;
+  const next = `${body}\n\nCommit the historical line:\n\n\`\`\`suggestion\n${replacement}\n\`\`\``;
+  return next.length <= 5000 && safeText(role, next) === next ? next : body;
+}
+
+function redactDecision(decision: Decision, role: Role): Decision {
+  return {
+    ...decision,
+    title: safeText(role, decision.title),
+    files: decision.files.map(file => ({ ...file, patch: safeText(role, file.patch) })),
+    sources: decision.sources.map(source => ({ ...source, quote: safeText(role, source.quote) }))
+  };
+}
 
 @Injectable()
 export class ReviewService {
@@ -12,10 +64,11 @@ export class ReviewService {
 
   async reviewers(repo: string, pr: number, role: Role) {
     const pull = await this.github.pull(repo, pr);
+    const author = pull.user?.login || '';
     const paths = new Set((await this.github.files(repo, pr)).filter(f => visibleFile(role, f)).map(f => f.filename));
     const people = new Map<string, { login: string; changes: number; reviews: number; paths: Set<string>; evidence: Set<string> }>();
-    const add = (login: string, kind: 'changes' | 'reviews', shared: string[], url: string) => {
-      if (login === pull.user.login || login.endsWith('[bot]')) return;
+    const add = (login: string | undefined, kind: 'changes' | 'reviews', shared: string[], url: string) => {
+      if (!login || login === author || login.endsWith('[bot]')) return;
       const person = people.get(login) ?? { login, changes: 0, reviews: 0, paths: new Set<string>(), evidence: new Set<string>() };
       person[kind]++;
       shared.forEach(p => person.paths.add(p)); person.evidence.add(url); people.set(login, person);
@@ -24,13 +77,14 @@ export class ReviewService {
       if (past.number === pr) continue;
       const shared = (await this.github.files(repo, past.number)).filter(f => visibleFile(role, f) && paths.has(f.filename)).map(f => f.filename);
       if (!shared.length) continue;
-      add(past.user.login, 'changes', shared, past.html_url);
+      add(past.user?.login, 'changes', shared, past.html_url);
       const seen = new Set<string>();
       for (const review of await this.github.reviews(repo, past.number)) {
         if (review.state === 'PENDING') continue;
-        if (seen.has(review.user.login)) continue;
-        seen.add(review.user.login);
-        add(review.user.login, 'reviews', shared, review.html_url);
+        const login = review.user?.login;
+        if (!login || seen.has(login)) continue;
+        seen.add(login);
+        add(login, 'reviews', shared, review.html_url);
       }
     }
     return { repo, pr, reviewers: [...people.values()].map(p => ({ ...p, paths: [...p.paths].sort(), evidence: [...p.evidence], score: p.changes * 2 + p.reviews }))
@@ -42,28 +96,38 @@ export class ReviewService {
     const pull = await this.github.pull(repo, pr);
     const check = await this.check(repo, pr, role);
     const conflicts = await this.conflicts(repo, pr, role);
+    const decisions = await decisionTimeline(this.github, repo, role);
     if ((await this.github.pull(repo, pr)).head.sha !== pull.head.sha) throw new Error('PR changed; refresh context and review the new head');
+    const quote = (value: unknown) => (typeof value === 'string' ? value : '').replace(/\n/g, '\n> ');
     const suggestions = [
       ...check.findings.map(f => ({ path: f.path, line: f.line,
-        body: `${f.rule}\n\n> ${f.source.quote.replace(/\n/g, '\n> ')}\n\nSource: ${f.source.url}` })),
-      ...conflicts.conflicts.map(c => ({ path: c.path, line: c.line,
-        body: `${c.warning}\n\n> ${c.source.quote.replace(/\n/g, '\n> ')}\n\nSource: ${c.source.url}\nHistorical fix: ${c.url}` }))
+        body: attachSuggestion(role, `${f.rule}\n\n> ${quote(f.source?.quote)}\n\nSource: ${f.source?.url ?? ''}`,
+          typeof f.code === 'string' ? historicalReplacement(f.code, f.source?.pr, f.path, decisions) : undefined) })),
+      ...conflicts.conflicts.map(c => {
+        const covered = check.findings.some(f => f.path === c.path && f.line === c.line);
+        const replacement = !covered && c.removed.trim() !== c.restored.trim() && !c.removed.includes('```') && !c.restored.includes('```') ? c.removed : undefined;
+        return { path: c.path, line: c.line,
+          body: attachSuggestion(role, `${c.warning}\n\n> ${quote(c.source?.quote)}\n\nSource: ${c.source?.url ?? ''}\nHistorical fix: ${c.url}`, replacement) };
+      })
     ];
     const comments = suggestions.filter(c => c.body.length <= 5000).slice(0, 50);
     const omitted = suggestions.length - comments.length;
+    const applyReady = comments.filter(c => c.body.includes('```suggestion\n')).length;
     const body = role.post === 'docs-only' ? '' : [
       suggestions.length ? `${suggestions.length} evidence-backed review suggestions; ${comments.length} inline comments prepared. Original sources accompany included comments.` : 'No supported rule violations or decision conflicts found.',
+      applyReady ? `${applyReady} ${applyReady === 1 ? 'comment includes' : 'comments include'} a GitHub suggestion with the exact historical line. The author can commit it from the review.` : 'No exact historical line was available for a commit-ready suggestion.',
       'Continue manual review: these checks do not establish correctness.',
       ...(omitted ? [`${omitted} ${omitted === 1 ? 'suggestion' : 'suggestions'} omitted due to posting limits.`] : [])
     ].join('\n\n');
-    return { repo, pr, posted: false, review: { repo, pr, body, comments, expected_head: pull.head.sha }, omitted_comments: omitted,
-      unchecked_paths: check.unchecked_paths, coverage: `${check.coverage}\n${conflicts.coverage}` };
+    return { repo, pr, posted: false, review: { repo, pr, body, comments, expected_head: pull.head.sha }, omitted_comments: omitted, apply_ready: applyReady,
+      unchecked_paths: check.unchecked_paths, coverage: `${check.coverage}\n${conflicts.coverage} Commit-ready suggestions are exact one-line historical replacements, not generated rewrites.` };
   }
 
   async post(repo: string, pr: number, input: ReviewInput, role: Role, expectedHead?: string) {
     const pull = await this.github.pull(repo, pr);
     if (expectedHead && pull.head.sha !== expectedHead) throw new Error('PR changed; refresh context and review the new head');
     const files = (await this.github.files(repo, pr)).filter(f => visibleFile(role, f));
+    if (!input.body.trim() && input.comments.length === 0) throw new Error('not found');
     if (safeText(role, input.body) !== input.body) throw new Error('not found');
     if (role.post === 'docs-only' && (input.body.trim() || !input.comments.length)) throw new Error('not found');
     for (const comment of input.comments) {
@@ -96,16 +160,18 @@ export class ReviewService {
         }
       }
     }
-    return { repo, pr, findings, unchecked_paths: files.filter(f => !f.patch).map(f => f.filename),
+    return { repo, pr, findings, unchecked_paths: files.filter(f => !hasHunks(f.patch)).map(f => f.filename),
       coverage: 'Added lines only. Single-line fetch/retry calls and diff-visible Markdown fence state. Findings are review suggestions; complex or multiline constructs need human review.' };
   }
 
-  async decisions(repo: string, role: Role) { return decisionTimeline(this.github, repo, role); }
+  async decisions(repo: string, role: Role) {
+    return (await decisionTimeline(this.github, repo, role)).map(decision => redactDecision(decision, role));
+  }
 
   async conflicts(repo: string, pr: number, role: Role) {
     const current = (await this.github.files(repo, pr)).filter(f => visibleFile(role, f));
     const conflicts = [];
-    for (const decision of await this.decisions(repo, role)) {
+    for (const decision of await decisionTimeline(this.github, repo, role)) {
       if (decision.pr === pr) continue;
       for (const file of current) {
         const before = decision.files.find(f => f.path === file.filename);
@@ -114,9 +180,10 @@ export class ReviewService {
         const removed = newRows.find(r => r.kind === 'remove' && r.text.trim().length > 10 && oldRows.some(o => o.kind === 'add' && o.text.trim() === r.text.trim()));
         const restored = newRows.find(r => r.kind === 'add' && r.text.trim().length > 10 && oldRows.some(o => o.kind === 'remove' && o.text.trim() === r.text.trim()));
         if (!removed || !restored) continue;
+        const source = decision.sources.find(s => s.path === file.filename) ?? { quote: decision.title, url: decision.url, path: file.filename };
         conflicts.push({ path: file.filename, line: restored.line, past_pr: decision.pr, warning: `This reverts the fix from #${decision.pr}; confirm the original incident cannot recur.`,
           removed: safeText(role, removed.text), restored: safeText(role, restored.text), url: decision.url,
-          source: decision.sources.find(s => s.path === file.filename) ?? { quote: decision.title, url: decision.url, path: file.filename },
+          source: { ...source, quote: safeText(role, source.quote) },
           confidence: 0.9, evidence: 'Exact reverse of a removed and an added line in a past fix/revert PR; semantic equivalence is not inferred.' });
       }
     }
@@ -133,20 +200,20 @@ export class ReviewService {
       const shared = (await this.github.files(repo, past.number)).filter(f => visibleFile(role, f) && paths.has(f.filename));
       if (shared.length) related.push({ pr: past.number, title: safeText(role, past.title), url: past.html_url, paths: shared.map(f => f.filename) });
     }
-    const issues = await this.linkedIssues(repo, pull.body, role);
+    const issues = await this.linkedIssues(repo, `${pull.title ?? ''}\n${pull.body ?? ''}`, role);
     const docs = [];
     for (const path of ['README.md', 'docs/review-guide.md']) {
       if (!canRead(role, path)) continue;
       try { docs.push({ path, text: safeText(role, await this.github.content(repo, path, pull.base.sha)) }); }
       catch (error) { if ((error as Error).message !== 'not found') throw error; }
     }
-    return { repo, pr, title: safeText(role, pull.title), author: pull.user.login, url: pull.html_url,
+    return { repo, pr, title: safeText(role, pull.title), author: pull.user?.login || 'ghost', url: pull.html_url,
       head: pull.head.sha, files: files.map(f => ({ ...f, patch: safeText(role, f.patch ?? '') })), issues, related, docs,
       coverage: 'Related history: up to 100 merged PRs ordered by update; docs: README.md and docs/review-guide.md. Missing patches are not reconstructed.' };
   }
 
-  async linkedIssues(repo: string, body: string, role: Role) {
-    const numbers = [...body.matchAll(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)].map(m => Number(m[1]));
+  async linkedIssues(repo: string, body: string | null | undefined, role: Role) {
+    const numbers = closingIssueNumbers(body, repo);
     const issues = [];
     for (const number of new Set(numbers)) {
       try { const issue = await this.github.issue(repo, number); issues.push({ number, title: safeText(role, issue.title), body: safeText(role, issue.body), url: issue.html_url }); }
@@ -159,25 +226,29 @@ export class ReviewService {
     if (!canRead(role, path)) throw new Error('not found');
     const head = await this.github.defaultHead(repo);
     const content = await this.github.content(repo, path, head);
-    if (line > content.split('\n').length) throw new Error('not found');
+    if (!Number.isInteger(line) || line < 1 || line > lineCount(content)) throw new Error('not found');
     let target = line;
     for (const entry of await this.github.history(repo, path, head)) {
       const commit = await this.github.commit(repo, entry.sha);
-      if (commit.parents.length > 1) break; // A merge patch is not line blame evidence.
-      const file = commit.files.find(f => f.filename === path);
+      if ((commit.parents?.length ?? 0) > 1) break; // A merge patch is not line blame evidence.
+      const file = (commit.files ?? []).find(f => f.filename === path);
       if (!file?.patch || file.previous_filename) break;
       const previous = previousLine(file.patch, target);
-      if (previous !== 'introduced') { target = previous; continue; }
-      const pulls = (await this.github.commitPulls(repo, commit.sha)).filter(p => p.merged_at);
-      const pull = pulls[0];
-      const comments = pull ? await this.github.comments(repo, pull.number) : [];
-      const thread = comments.filter(c => canRead(role, c.path) && c.path === path &&
-        (c.line === target || c.original_line === target)).map(c => ({ quote: safeText(role, c.body), url: c.html_url, author: c.user.login }));
-      return { repo, path, line, explanation: safeText(role, thread[0]?.quote ?? commit.commit.message.split('\n')[0]),
-        blame: { sha: commit.sha, line: target, author: commit.author?.login ?? commit.commit.author.name, url: commit.html_url },
-        commit: { message: safeText(role, commit.commit.message), url: commit.html_url },
-        pr: pull ? { number: pull.number, title: safeText(role, pull.title), url: pull.html_url } : null,
-        thread, issues: pull ? await this.linkedIssues(repo, pull.body, role) : [], evidence: 'Line introduction traced through REST commit patches' };
+      if (previous === 'introduced') {
+        const pulls = (await this.github.commitPulls(repo, commit.sha)).filter(p => p.merged_at);
+        const pull = pulls[0];
+        const comments = pull ? await this.github.comments(repo, pull.number) : [];
+        const thread = comments.filter(c => typeof c.path === 'string' && canRead(role, c.path) && c.path === path &&
+          (c.line === target || c.original_line === target)).map(c => ({ quote: safeText(role, c.body), url: c.html_url, author: c.user?.login || 'unknown' }));
+        const message = commit.commit?.message ?? '';
+        return { repo, path, line, explanation: safeText(role, thread[0]?.quote ?? message.split('\n')[0] ?? ''),
+          blame: { sha: commit.sha, line: target, author: commit.author?.login || commit.commit?.author?.name || 'unknown', url: commit.html_url },
+          commit: { message: safeText(role, message), url: commit.html_url },
+          pr: pull ? { number: pull.number, title: safeText(role, pull.title), url: pull.html_url } : null,
+          thread, issues: pull ? await this.linkedIssues(repo, `${pull.title ?? ''}\n${pull.body ?? ''}`, role) : [], evidence: 'Line introduction traced through REST commit patches' };
+      }
+      if (previous < 1) break;
+      target = previous;
     }
     return { repo, path, line, explanation: 'History incomplete; no supported explanation found.', evidence: 'At most 100 path commits; stops at merges, renames or missing patches' };
   }

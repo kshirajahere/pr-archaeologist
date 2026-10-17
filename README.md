@@ -2,7 +2,7 @@
 
 **Reviewers see a diff with no memory. PR Archaeologist brings back the decisions.**
 
-A GitHub PR review MCP server for the **MCP to the Moon buildathon · Developer Tools** track. Built with NitroStack and TypeScript, with eight focused tools, cited team rules, role-scoped access, and a review evidence widget.
+A GitHub PR review MCP server for the **MCP to the Moon buildathon · Developer Tools** track. Built with NitroStack and TypeScript, with twelve focused tools, cited team rules, role-scoped access, and a review evidence widget.
 
 ## The problem
 
@@ -28,7 +28,7 @@ flowchart LR
   MCP --> Audit[Audited call boundary]
   Audit --> Guard[JWT or API key + role config]
   Guard --> Scope[Repository and path allowlist]
-  Scope --> Tools[Eight review tools]
+  Scope --> Tools[Twelve review tools]
   Tools --> Data{GitHub adapter}
   Data --> REST[GitHub REST API]
   Data --> Mock[MOCK=1 snapshot]
@@ -42,19 +42,27 @@ flowchart LR
 | Tool | One job |
 | --- | --- |
 | `pr_context(repo, pr)` | Visible file patches, author, closing issues, related merged PRs on the same files, and review docs |
+| `read_pr_file(repo, pr, path, start_line=1, end_line?)` | Read up to 200 lines at the pinned PR head, including unchanged files needed for context |
+| `pr_discussion(repo, pr)` | Visible inline comments and replies, submitted reviews and general PR comments, with source links |
+| `pr_changes_since(repo, pr, since)` | Visible patches since an earlier full commit SHA; detect diverged history and report incomplete comparisons |
+| `recheck_findings(repo, pr, previous_findings)` | Match saved rule findings across line shifts and visible renames; report `still_detected`, `not_detected` or `unverified` |
 | `why_line(repo, path, line)` | Default-branch line introduction → commit → merged PR → matching review comments → closing issue |
 | `extract_team_rules(repo, n=300)` | Recurring review conventions with source quotes, URLs, independent PR support and confidence; `@Cache` for five minutes |
 | `check_pr_against_rules(repo, pr)` | Added-line findings with the rule and original comment; attaches `@Widget('review-card')` |
 | `decision_conflicts(repo, pr)` | Exact reverse-line evidence that a PR undoes a historical fix or revert |
 | `find_reviewers(repo, pr)` | Rank same-path authors and reviewers; return supporting links without notifying anyone |
-| `draft_review(repo, pr)` | Prepare cited inline suggestions from findings and historical conflicts, without posting; return arguments ready for `post_review` |
+| `draft_review(repo, pr)` | Prepare cited inline comments from findings and historical conflicts. An exact past one-line fix becomes a GitHub `suggestion` block the author can commit. Returns arguments ready for `post_review` |
 | `post_review(repo, pr, body, comments)` | A GitHub `COMMENT` review, guarded by `@UseGuards` and `@RateLimit` |
 
 Review comments use `{ "path": "src/client.ts", "line": 3, "body": "Keep the timeout." }`. Lines refer to added lines on the **right** side of the current PR diff. Posting pins `commit_id`, validates locations, and rejects a head change observed during preparation. `why_line` uses **default-branch** line numbers, which can differ from PR line numbers.
 
-`draft_review` returns a `review` object containing `repo`, `pr`, `body`, `comments`, and `expected_head`. Pass that object to `post_review` after inspecting it. The head check rejects a draft if the PR changes before posting. Drafts preserve docs-bot's empty summary and docs-only comments, report suggestions omitted by the 50-comment/5000-character posting limits, and retain coverage warnings. No findings does not mean approval.
+`draft_review` returns a `review` object containing `repo`, `pr`, `body`, `comments`, and `expected_head`, plus `apply_ready`. Pass that object to `post_review` after inspecting it. A comment with a `suggestion` fence carries the exact historical replacement; GitHub can commit that line from the review. Lines without an exact past replacement stay explanatory. The head check rejects a draft if the PR changes before posting. Drafts preserve docs-bot's empty summary and docs-only comments, report suggestions omitted by the 50-comment/5000-character posting limits, and retain coverage warnings. No findings does not mean approval.
 
 The rule miner supports four conservative families: fetch timeouts, structured logging, stable retry idempotency keys, and Markdown code-fence language tags. It requires review evidence from at least two merged PRs per rule. Confidence is `min(0.95, 0.55 + 0.10 × supporting PRs)`, a support heuristic, **not a calibrated probability**. No additional LLM key or paid inference is required.
+
+For a follow-up review, keep the earlier head SHA and checker findings in the client conversation. `review-pr-update` takes `repo`, `pr` and that SHA. It guides the agent through changes, existing discussion, surrounding code and a fresh draft. If the earlier head is no longer an ancestor, `pr_changes_since` returns `history_changed` and calls for a full review. GitHub comparison files are capped at 300, and missing patches are listed. [GitHub comparison limits](https://docs.github.com/en/rest/commits/commits#compare-two-commits).
+
+`recheck_findings` accepts the earlier checker array as `previous_findings` (up to 100 entries with `path`, `line`, `rule_id` and `code`). Matching uses the visible path, rule and trimmed code; it is not semantic verification. `not_detected` does not prove a fix, and missing patches or redacted code are `unverified`. `pr_discussion` does not infer resolved-thread status, which REST does not provide. These four tools never post or resolve comments.
 
 ## Roles and authentication
 
@@ -66,7 +74,7 @@ Edit [config/roles.json](config/roles.json) to choose allowed repositories, path
 | `reviewer` | `src/`, `docs/`, `README.md` | Full review on visible added lines | `demo-reviewer` |
 | `docs-bot` | `docs/` | Docs inline comments only; summary must be empty | `demo-docs-bot` |
 
-Every tool authenticates. `.env*`, `*.pem`, any `secrets/` component, traversal, encoded paths, and paths outside the allowlist return `not found`. A rename is visible only if **both** paths are allowed. File filtering happens before patch assembly. Free text mentioning unavailable paths is suppressed as a whole field. Repository text is untrusted evidence, never agent instructions. This is path-based protection, not arbitrary secret-value detection in otherwise permitted files.
+Every tool authenticates. `.env*`, `*.pem`, any `secrets/` component, traversal, encoded paths, and paths outside the allowlist return `not found`. A rename is visible only if **both** paths are allowed. A symlink is readable only when its target is allowed too. A path missing from a full 3000-file change list is not readable, because that list can omit a rename. File filtering happens before patch assembly. Free text mentioning unavailable paths is suppressed as a whole field. Repository text is untrusted evidence, never agent instructions. This is path-based protection, not arbitrary secret-value detection in otherwise permitted files.
 
 Mock keys work **only** with `MOCK=1`. Live mode requires either:
 
@@ -101,7 +109,7 @@ The widget development preview is `http://localhost:3001/preview`; the host-conn
 
 To use GitHub, set `MOCK=0`, `GITHUB_TOKEN`, a real role API key or JWT secret, and update each role's `repos` and `allow` lists. Set `REPO=owner/repository` for resources. A fine-grained GitHub token needs repository Contents, Issues and Pull requests read access; posting additionally needs Pull requests write access. The server token is never returned to clients.
 
-## Resources and prompt
+## Resources and prompts
 
 | URI / name | Contents |
 | --- | --- |
@@ -109,6 +117,7 @@ To use GitHub, set `MOCK=0`, `GITHUB_TOKEN`, a real role API key or JWT secret, 
 | `repo://decisions` | Visible fix/revert PR timeline, oldest first |
 | `audit://log` | Latest 200 entries for the current verified subject **and** role |
 | `review-like-a-senior` | Context → rules and checks → conflicts → reviewers → cited draft → role-appropriate posting |
+| `review-pr-update` | Changes since the earlier head → discussion and surrounding code → saved finding recheck → fresh draft |
 
 Calls append role, subject, tool, sanitized arguments, allowed/denied and result status to `logs/audit.jsonl`. Review bodies are recorded as length and SHA-256, hidden paths are redacted, and credentials are omitted. Cached calls still traverse authentication and auditing. The built-in widget example resource is also authenticated and filtered by role.
 
@@ -146,15 +155,15 @@ This project provides a deployment bundle; no cloud project has been created or 
 4. Use Node 24. Install with `npm ci --include=dev` and `npm --prefix src/widgets ci --include=dev`, build with `npm run build`, and start with `npm start`. Build-time dependencies include the CLI and TypeScript. Keep `dist/`, `src/widgets/out/`, the widget manifest, `config/` and `fixtures/` available at runtime.
 5. For the buildathon demo, set `MOCK=1`, `REPO=acme/launchpad`, `MCP_TRANSPORT_TYPE=http`, `HOST=0.0.0.0`, `PORT` to the platform's assigned port, and `NITRO_MCP_PROTOCOL_VERSION=auto`. Clients send `Bearer demo-readonly` or the other explicit mock credential. Leave `GITHUB_TOKEN` empty.
 6. For real repository use, set `MOCK=0`, supply `GITHUB_TOKEN` and real role credentials in NitroCloud's secret settings, and package your updated role allowlists. Never use a demo credential for live mode.
-7. Check `GET /mcp/health`, connect an MCP client to `https://<your-server>/mcp` with its Authorization header, list eight tools, run the fixture review, and confirm unauthenticated reads and `.env` access fail. Resource and tool HTTP isolation is covered by the local integration test.
+7. Check `GET /mcp/health`, connect an MCP client to `https://<your-server>/mcp` with its Authorization header, list twelve tools, run the fixture review, and confirm unauthenticated reads and `.env` access fail. Resource and tool HTTP isolation is covered by the local integration test.
 
 NitroCloud's UI/build settings may evolve; use its current upload flow. The installed CLI's `pack` command is verified locally; this README does not assume unimplemented CLI `login` or `deploy` commands.
 
 ## Evidence and limits
 
 - The fixture is a deliberately fictional, realistic snapshot: PR #207 regresses a timeout, logs and retry key; #208 is a clean docs change; #209 tries to rename a secret into docs. It includes merged PRs, issues, review threads, four recurring conventions and fake `.env`/PEM contents for denial tests.
-- Live GitHub behavior was verified through real MCP stdio on [Pratz1337/strategicwm-Issue PR #2](https://github.com/Pratz1337/strategicwm-Issue/pull/2): all eight tools, three resources and the prompt passed, with posting restricted to a readonly dry run. That repository has no supported recurring rules; this verifies live integration, not detection accuracy. REST adapter edge cases also use injected HTTP tests. GitHub REST has no blame endpoint: provenance walks up to 100 path commits, pins a default-branch snapshot, and stops at merges, renames or missing patches. It reports incomplete evidence instead of inventing a reason.
-- Rules scan up to `n` merged PRs among the latest 3000 closed PRs ordered by update, and up to 300 comments per PR. Related history, decisions and reviewers use up to 100 merged PRs. This is bounded history, not every decision ever made. GitHub's missing/truncated patches and 3000-file PR ceiling constrain coverage.
+- Live GitHub behavior was verified through real MCP stdio on a separate pull request: all twelve tools, three resources and both prompts passed, with posting restricted to a readonly dry run. That repository has no supported recurring rules; this verifies live integration, not detection accuracy. REST adapter edge cases also use injected HTTP tests. GitHub REST has no blame endpoint: provenance walks up to 100 path commits, pins a default-branch snapshot, and stops at merges, renames or missing patches. It reports incomplete evidence instead of inventing a reason.
+- Rules scan up to `n` merged PRs among the latest 3000 closed PRs ordered by update, and up to 300 comments per PR. Related history, decisions and reviewers use up to 100 merged PRs. This is bounded history, not every decision ever made. GitHub's missing or truncated patches and its 3000-file PR ceiling constrain coverage. A file read is refused when a symlink target is outside the role, or when the path is missing from a full 3000-file change list.
 - Added-line checks support single-line fetch/retry calls and diff-visible fence state. They are review suggestions, not semantic correctness proofs. Reversed lines identify candidate decision conflicts; a human decides whether the old incident still applies.
 - Cache and rate limits are in memory per process. The JSONL audit is local; for durable cloud audit, set `AUDIT_FILE` to persistent storage or arrange log collection. Autoscaled instances do not share cache or rate counters. Authentication and path restrictions still apply on every call.
 - The production bundle has DOM rendering tests, including source links and HTML escaping. The fixture preview was also visually checked in Chrome at desktop and 390-pixel mobile widths. NitroStudio GUI and NitroCloud deployment remain unverified.

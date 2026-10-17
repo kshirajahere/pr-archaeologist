@@ -71,8 +71,8 @@
     },
     {
       "number": 207,
-      "title": "Simplify upstream client",
-      "body": "Fixes #201",
+      "title": "Simplify upstream client, fixes #201",
+      "body": "",
       "html_url": "https://github.com/acme/launchpad/pull/207",
       "user": {
         "login": "leo"
@@ -187,6 +187,11 @@
         "filename": "docs/setup.md",
         "status": "modified",
         "patch": "@@ -1 +1 @@\n-# Setup\n+# Local setup"
+      },
+      {
+        "filename": "docs/diagram.bin",
+        "status": "added",
+        "patch": "Binary files /dev/null and b/docs/diagram.bin differ"
       }
     ],
     "209": [
@@ -199,6 +204,70 @@
     ]
   },
   "comments": {
+    "207": [
+      {
+        "id": 20701,
+        "body": "Keep the timeout in src/client.ts; it protects incident #41.",
+        "path": "src/client.ts",
+        "line": 3,
+        "commit_id": "head207",
+        "html_url": "https://github.com/acme/launchpad/pull/207#discussion_r20701",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 20702,
+        "body": "Will restore this.",
+        "path": "src/client.ts",
+        "line": 3,
+        "commit_id": "head207",
+        "html_url": "https://github.com/acme/launchpad/pull/207#discussion_r20702",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        },
+        "in_reply_to_id": 20701
+      },
+      {
+        "id": 20703,
+        "body": "This comment is on an older diff.",
+        "path": "src/client.ts",
+        "line": null,
+        "commit_id": "head207",
+        "html_url": "https://github.com/acme/launchpad/pull/207#discussion_r20703",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        },
+        "original_line": 3
+      },
+      {
+        "id": 20704,
+        "body": "Add a language tag.",
+        "path": "docs/setup.md",
+        "line": 2,
+        "commit_id": "head207",
+        "html_url": "https://github.com/acme/launchpad/pull/207#discussion_r20704",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 20705,
+        "body": "FIXTURE_SECRET_NEVER_RETURN",
+        "path": ".env",
+        "line": 3,
+        "commit_id": "head207",
+        "html_url": "https://github.com/acme/launchpad/pull/207#discussion_r20705",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        }
+      }
+    ],
     "42": [
       {
         "id": 4201,
@@ -253,6 +322,19 @@
         "user": {
           "login": "ava"
         }
+      },
+      {
+        "id": 5803,
+        "body": "Reuse the same idempotency key across retries; do not mint a new one per attempt.",
+        "path": "src/health.ts",
+        "line": 2,
+        "original_line": 2,
+        "commit_id": "head58",
+        "html_url": "https://github.com/acme/launchpad/pull/58#discussion_r5803",
+        "created_at": "2025-06-01T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
       }
     ],
     "61": [
@@ -281,6 +363,30 @@
         "user": {
           "login": "mina"
         }
+      },
+      {
+        "id": 6103,
+        "body": "Always set an explicit timeout on fetch calls so this client cannot stall.",
+        "path": "src/client.ts",
+        "line": 5,
+        "original_line": 5,
+        "commit_id": "head61",
+        "html_url": "https://github.com/acme/launchpad/pull/61#discussion_r6103",
+        "created_at": "2025-04-02T11:00:00Z",
+        "user": {
+          "login": "dependabot[bot]"
+        }
+      },
+      {
+        "id": 6104,
+        "body": "Always set an explicit timeout on fetch calls. Author missing.",
+        "path": "src/client.ts",
+        "line": 5,
+        "original_line": 5,
+        "commit_id": "head61",
+        "html_url": "https://github.com/acme/launchpad/pull/61#discussion_r6104",
+        "created_at": "2025-04-02T11:05:00Z",
+        "user": null
       }
     ],
     "75": [
@@ -326,6 +432,25 @@
     ]
   },
   "reviews": {
+    "207": [
+      {
+        "user": {
+          "login": "ava"
+        },
+        "state": "CHANGES_REQUESTED",
+        "body": "Please keep the protection in src/client.ts.",
+        "html_url": "https://github.com/acme/launchpad/pull/207#pullrequestreview-20701",
+        "submitted_at": "2026-10-17T09:05:00Z"
+      },
+      {
+        "user": {
+          "login": "leo"
+        },
+        "state": "PENDING",
+        "body": "unsubmitted draft",
+        "html_url": "https://github.com/acme/launchpad/pull/207#pullrequestreview-20702"
+      }
+    ],
     "42": [
       {
         "user": {
@@ -333,6 +458,32 @@
         },
         "state": "APPROVED",
         "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-42"
+      },
+      {
+        "user": {
+          "login": "ava"
+        },
+        "state": "COMMENTED",
+        "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-4202"
+      },
+      {
+        "user": {
+          "login": "dependabot[bot]"
+        },
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-bot"
+      },
+      {
+        "user": null,
+        "state": "COMMENTED",
+        "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-null"
+      },
+      {
+        "user": {
+          "login": "leo"
+        },
+        "state": "COMMENTED",
+        "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-leo"
       }
     ],
     "58": [
@@ -410,6 +561,67 @@
       "html_url": "https://github.com/acme/launchpad/issues/201"
     }
   ],
+  "contentsByRef": {
+    "head207": {
+      "src/client.ts": "export async function load(url: string, key: string) {\n  // Bound upstream stalls; see incident #41.\n  const response = await fetch(url);\n  console.log(response.status);\n  return retry(() => charge(crypto.randomUUID()));\n}\n",
+      "docs/setup.md": "# Setup\n```\nnpm install\n```\n"
+    }
+  },
+  "issueComments": {
+    "207": [
+      {
+        "id": 20710,
+        "body": "Please keep the incident #41 protection.",
+        "html_url": "https://github.com/acme/launchpad/pull/207#issuecomment-20710",
+        "created_at": "2026-10-17T09:00:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 20711,
+        "body": "Inspect src/client.ts before merging.",
+        "html_url": "https://github.com/acme/launchpad/pull/207#issuecomment-20711",
+        "created_at": "2026-10-17T09:01:00Z",
+        "user": {
+          "login": "mina"
+        }
+      }
+    ]
+  },
+  "comparisons": {
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...head207": {
+      "status": "ahead",
+      "base_commit": {
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "merge_base_commit": {
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "files": [
+        {
+          "filename": "src/client.ts",
+          "status": "modified",
+          "patch": "@@ -1,6 +1,6 @@\n export async function load(url: string, key: string) {\n   // Bound upstream stalls; see incident #41.\n-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n-  logger.info({ status: response.status }, \"upstream response\");\n-  return retry(() => charge(key));\n+  const response = await fetch(url);\n+  console.log(response.status);\n+  return retry(() => charge(crypto.randomUUID()));\n }"
+        },
+        {
+          "filename": "docs/setup.md",
+          "status": "modified",
+          "patch": "@@ -1,3 +1,3 @@\n # Setup\n-```sh\n+```\n npm install"
+        },
+        {
+          "filename": ".env",
+          "status": "modified",
+          "patch": "@@ -1 +1 @@\n-TOKEN=old\n+TOKEN=FIXTURE_SECRET_NEVER_RETURN"
+        },
+        {
+          "filename": "secrets/service.pem",
+          "status": "added",
+          "patch": "@@ -0,0 +1 @@\n+FIXTURE_PRIVATE_KEY"
+        }
+      ]
+    }
+  },
   "contents": {
     "src/client.ts": "export async function load(url: string, key: string) {\n  // Bound upstream stalls; see incident #41.\n  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n  logger.info({ status: response.status }, \"upstream response\");\n  return retry(() => charge(key));\n}\n",
     "docs/setup.md": "# Setup\n```sh\nnpm install\n```\n",

@@ -21,6 +21,20 @@ test('draft combines cited findings and conflicts without posting and can be dry
   assert.equal(result.dry_run, true);
   assert.equal(result.head, 'head207');
 });
+test('draft turns exact historical replacements into commit-ready suggestions', async () => {
+  const service = new ReviewService();
+  const draft = await service.draft(repo, 207, roles.reviewer);
+  const fetch = draft.review.comments.find(c => c.line === 3 && c.body.includes('```suggestion'));
+  const logged = draft.review.comments.find(c => c.body.includes('console.log'));
+  const retry = draft.review.comments.find(c => c.body.includes('randomUUID'));
+  assert.match(fetch.body, /```suggestion\n {2}const response = await fetch\(url, \{ signal: AbortSignal\.timeout\(5000\) \}\);\n```/);
+  assert.match(logged.body, /```suggestion\n {2}logger\.info\(\{ status: response\.status \}, "upstream response"\);\n```/);
+  assert.doesNotMatch(retry.body, /```suggestion/);
+  assert.equal(draft.apply_ready, 2);
+  const posted = await service.post(repo, 207, draft.review, roles.reviewer, draft.review.expected_head);
+  assert.equal(posted.posted, true);
+  assert.match(service.github.posted[0].comments.find(c => c.line === 3).body, /```suggestion/);
+});
 
 test('draft respects docs-only scope and never writes for a posting role', async () => {
   const service = new ReviewService();

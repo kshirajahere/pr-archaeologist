@@ -20,6 +20,13 @@ The “before” is illustrative, not an asserted model benchmark. Keep the fixt
 label visible. The original-comment links show the provenance format; do not
 claim this fictional repository's links are live historical evidence.
 
+For a longer follow-up demo, show `pr_discussion`, read `src/client.ts` at PR
+#207's head with `read_pr_file`, then run `pr_changes_since` using the fixture's
+earlier SHA `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Pass the four checker
+findings to `recheck_findings`: they remain `still_detected`. This fixture does
+not simulate a fix. For a real updated PR, choose `review-pr-update` with the
+previously reviewed head SHA; diverged history requires a fresh full review.
+
 If Studio's UI or chat model is unavailable, `npm run demo` runs the same tool
 sequence over real MCP stdio and asserts the results. Its complete response
 payloads are in `logs/demo-output.json`; the source fixture is

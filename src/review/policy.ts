@@ -70,13 +70,13 @@ export function safeText(role: Role, value: string): string {
   for (const raw of urls) {
     let url: URL;
     try { url = new URL(raw); } catch { continue; }
-    const parts = url.pathname.split('/').filter(Boolean).map(part => { try { return decodeURIComponent(part); } catch { return part; } });
+    const parts = url.pathname.split('/').filter(Boolean).map(part => decodeRepeated(part));
     if (isSecretPath(parts.join('/'))) return REDACTED;
     if (url.hostname.toLowerCase() === 'github.com' && parts.length >= 5 && ['blob', 'raw', 'tree'].includes(parts[2])
       && mentionsUnavailable(role, parts.slice(4).join('/'))) return REDACTED;
   }
   const withoutUrls = value.replace(/https?:\/\/[^\s)\]>'"]+/g, ' ');
-  const tokenRe = /(?:\.{1,2}[/\\]|(?:[\w.-]+[/\\])+)[\w.@%-]+|(?:^|[^A-Za-z0-9_.])\.env(?:\.[\w.-]+)?|[\w.-]+\.pem/gi;
+  const tokenRe = /(?:\.{1,2}[/\\]|(?:[\w.%.-]+[/\\])+)[\w.@%-]+|(?:^|[^A-Za-z0-9_.])\.env(?:\.[\w.-]+)?|[\w.-]+\.pem/gi;
   for (const match of withoutUrls.matchAll(tokenRe)) {
     if (mentionsUnavailable(role, match[0])) return REDACTED;
   }

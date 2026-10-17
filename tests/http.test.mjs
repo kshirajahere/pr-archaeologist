@@ -33,14 +33,22 @@ test('production HTTP authenticates tools and resources; identities remain isola
       const args = { repo: 'acme/launchpad', pr: 207 };
       const result = await client.callTool({ name: 'pr_context', arguments: args });
       const draftResult = await client.callTool({ name: 'draft_review', arguments: args });
+      const followups = await Promise.all([
+        ['read_pr_file', { path: 'docs/setup.md' }], ['pr_discussion', {}],
+        ['pr_changes_since', { since: 'a'.repeat(40) }], ['recheck_findings', { previous_findings: [] }]
+      ].map(([name, extra]) => client.callTool({ name, arguments: { ...args, ...extra } })));
       if (!key) {
         assert.equal(result.isError, true);
         assert.equal(draftResult.isError, true);
+        assert.ok(followups.every(r => r.isError === true));
+        await assert.rejects(client.getPrompt({ name: 'review-pr-update', arguments: { repo: 'acme/launchpad', pr: '207', since: 'a'.repeat(40) } }), /not found/);
         await assert.rejects(client.readResource({ uri: 'repo://rules' }), /not found/);
         continue;
       }
       assert.equal(result.isError, undefined, JSON.stringify(result));
       assert.equal(draftResult.isError, undefined, JSON.stringify(draftResult));
+      assert.ok(followups.every(r => r.isError === undefined), JSON.stringify(followups));
+      assert.match(JSON.stringify(followups[0]), /head207/);
       const draft = draftResult.structuredContent ?? JSON.parse(draftResult.content.find(c => c.type === 'text').text);
       assert.equal(draft.posted, false);
       assert.equal(draft.review.expected_head, 'head207');
@@ -51,6 +59,7 @@ test('production HTTP authenticates tools and resources; identities remain isola
         assert.equal(draft.review.body, '');
         assert.ok(draft.review.comments.every(c => c.path.startsWith('docs/')));
         assert.doesNotMatch(JSON.stringify(draft), /src\/client/);
+        assert.doesNotMatch(JSON.stringify(followups), /src\/client|FIXTURE_SECRET|credentials\.md/);
         assert.doesNotMatch(JSON.stringify(result), /src\/client/);
         const examples = await client.readResource({ uri: 'widget://examples' });
         assert.doesNotMatch(JSON.stringify(examples), /src\/client/);

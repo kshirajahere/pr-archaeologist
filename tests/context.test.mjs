@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.MOCK = '1';
-const { ReviewService } = await import('../dist/review/review.service.js');
+const { ReviewService, closingIssueNumbers } = await import('../dist/review/review.service.js');
 const { GitHub } = await import('../dist/review/github.js');
 const { roles, canRead } = await import('../dist/review/policy.js');
-const { previousLine } = await import('../dist/review/diff.js');
+const { previousLine, lineCount } = await import('../dist/review/diff.js');
 
 test('context gives patches, issues, shared history and docs without hidden files', async () => {
   const result = await new ReviewService().context('acme/launchpad', 207, roles.readonly);
@@ -61,4 +61,23 @@ test('REST adapter paginates file lists and encodes paths without live network',
   assert.equal(urls.length, 2);
   assert.match(urls[1], /page=2/);
   delete process.env.GITHUB_TOKEN;
+});
+test('line counts ignore a trailing newline and a phantom line is not found', async () => {
+  assert.equal(lineCount(''), 0);
+  assert.equal(lineCount('a\n'), 1);
+  assert.equal(lineCount('a\nb'), 2);
+  assert.equal(lineCount('a\r\nb\r\n'), 2);
+  const service = new ReviewService();
+  await assert.rejects(service.why('acme/launchpad', 'src/client.ts', 7, roles.readonly), /not found/);
+  const line = await service.why('acme/launchpad', 'src/client.ts', 6, roles.readonly);
+  assert.equal(typeof line.explanation, 'string');
+});
+test('closing references ignore unresolved words and other repositories', () => {
+  const name = 'acme/launchpad';
+  assert.deepEqual(closingIssueNumbers('unresolved #12', name), []);
+  assert.deepEqual(closingIssueNumbers('fixing #201', name), []);
+  assert.deepEqual(closingIssueNumbers('Fixes https://github.com/other/repo/issues/9', name), []);
+  assert.deepEqual(closingIssueNumbers('Fixes: #41', name), [41]);
+  assert.deepEqual(closingIssueNumbers('See https://github.com/acme/launchpad/issues/201 and https://github.com/acme/launchpad/pull/42', name), [201, 42]);
+  assert.deepEqual(closingIssueNumbers(null, name), []);
 });

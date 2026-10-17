@@ -18,7 +18,7 @@ export class ReviewTools {
     return this.service.reviewers(input.repo, input.pr, roleFor(ctx, input.repo));
   }
 
-  @Tool({ name: 'draft_review', description: 'Prepare an evidence-backed review from supported rule findings and historical decision conflicts, without posting. Returns review arguments for post_review, including expected_head to reject stale drafts. Preserves role scope and docs-only summary restrictions. Show the exact draft to the user before posting; report omitted comments and coverage limits.',
+  @Tool({ name: 'draft_review', description: 'Prepare an evidence-backed review from supported rule findings and historical decision conflicts, without posting. When a past fix replaced the same line, the comment includes a GitHub suggestion block the author can commit from the review. Returns review arguments for post_review, including expected_head to reject stale drafts. Preserves role scope and docs-only summary restrictions. Show the exact draft to the user before posting; report omitted comments and coverage limits.',
     annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: z.object({ repo: repoSchema, pr: prSchema }) })
   @UseGuards(RoleGuard)

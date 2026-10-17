@@ -23,6 +23,11 @@ try {
   await client.connect(transport);
   const args = { repo: 'acme/launchpad', pr: 207 };
   const context = await call('pr_context', args);
+  const file = await call('read_pr_file', { ...args, path: 'src/client.ts', start_line: 3, end_line: 5 });
+  assert.equal(file.head, context.head);
+  assert.match(file.content, /fetch\(url\)/);
+  const discussion = await call('pr_discussion', args);
+  assert.ok(discussion.inline_comments.length);
   console.log(`BEFORE: #207 removes three lines of boilerplate. A diff alone omits the incident and team decisions. (${context.files.length} visible files)`);
   const why = await call('why_line', { repo: args.repo, path: 'src/client.ts', line: 3 });
   assert.equal(why.pr.number, 42);
@@ -31,6 +36,11 @@ try {
   const check = await call('check_pr_against_rules', args);
   assert.equal(rulebook.rules.length, 4); assert.equal(check.findings.length, 4);
   for (const f of check.findings) console.log(`RULE: ${f.path}:${f.line} — ${f.rule}\n  "${f.source.quote}"\n  ${f.source.url}`);
+  const changes = await call('pr_changes_since', { ...args, since: 'a'.repeat(40) });
+  assert.equal(changes.status, 'ahead');
+  const recheck = await call('recheck_findings', { ...args, previous_findings: check.findings });
+  assert.ok(recheck.findings.every(f => f.status === 'still_detected'));
+  console.log(`FOLLOW-UP: ${changes.files.length} visible changed files; ${recheck.findings.length} saved findings still detected at ${recheck.head}.`);
   const conflicts = await call('decision_conflicts', args);
   assert.ok(conflicts.conflicts.some(c => c.past_pr === 42));
   console.log(`CONFLICT: ${conflicts.conflicts[0].warning}`);
@@ -39,7 +49,9 @@ try {
   const draft = await call('draft_review', args);
   assert.equal(draft.posted, false);
   assert.equal(draft.review.expected_head, context.head);
-  console.log(`DRAFT: ${draft.review.comments.length} cited inline suggestions, pinned to ${draft.review.expected_head}.`);
+  assert.ok(draft.apply_ready >= 2);
+  assert.ok(draft.review.comments.some(c => c.body.includes('```suggestion\n') && c.body.includes('AbortSignal.timeout')));
+  console.log(`DRAFT: ${draft.review.comments.length} cited comments, ${draft.apply_ready} commit-ready suggestions, pinned to ${draft.review.expected_head}.`);
   const review = await call('post_review', draft.review);
   assert.equal(review.dry_run, true);
   console.log('REVIEW: readonly dry run; no GitHub write.');
