@@ -36,8 +36,12 @@ try {
   console.log(`CONFLICT: ${conflicts.conflicts[0].warning}`);
   const people = await call('find_reviewers', args);
   console.log(`REVIEWERS: ${people.reviewers.map(p => `${p.login} (${p.score})`).join(', ')}`);
-  const draft = await call('post_review', { ...args, body: 'Please retain the deliberate timeout fix from #42.', comments: check.findings.map(f => ({ path: f.path, line: f.line, body: `${f.rule}\n\n> ${f.source.quote}\n\nSource: ${f.source.url}` })) });
-  assert.equal(draft.dry_run, true);
+  const draft = await call('draft_review', args);
+  assert.equal(draft.posted, false);
+  assert.equal(draft.review.expected_head, context.head);
+  console.log(`DRAFT: ${draft.review.comments.length} cited inline suggestions, pinned to ${draft.review.expected_head}.`);
+  const review = await call('post_review', draft.review);
+  assert.equal(review.dry_run, true);
   console.log('REVIEW: readonly dry run; no GitHub write.');
   const denied = await client.callTool({ name: 'why_line', arguments: { repo: args.repo, path: '.env', line: 1 } });
   assert.equal(denied.isError, true); assert.match(JSON.stringify(denied), /not found/);

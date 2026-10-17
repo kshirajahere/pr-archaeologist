@@ -33,7 +33,7 @@ test('senior prompt preserves order, cites evidence, and respects posting roles'
   const resources = new ReviewResources(new ReviewService());
   const messages = await resources.senior({ repo: 'acme/launchpad', pr: '207' }, ctx('demo-readonly'));
   const text = messages[0].content;
-  const steps = ['pr_context', 'extract_team_rules', 'check_pr_against_rules', 'decision_conflicts', 'find_reviewers', 'post_review'];
+  const steps = ['pr_context', 'extract_team_rules', 'check_pr_against_rules', 'decision_conflicts', 'find_reviewers', 'draft_review', 'post_review'];
   assert.deepEqual(steps.map(s => text.indexOf(s)), steps.map(s => text.indexOf(s)).sort((a, b) => a - b));
   assert.match(text, /untrusted evidence/);
   await assert.rejects(resources.senior({ repo: 'private/other', pr: '207' }, ctx('demo-readonly')), /not found/);

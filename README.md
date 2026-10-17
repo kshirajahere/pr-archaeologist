@@ -2,7 +2,7 @@
 
 **Reviewers see a diff with no memory. PR Archaeologist brings back the decisions.**
 
-A GitHub PR review MCP server for the **MCP to the Moon buildathon · Developer Tools** track. Built with NitroStack and TypeScript, with seven focused tools, cited team rules, role-scoped access, and a review evidence widget.
+A GitHub PR review MCP server for the **MCP to the Moon buildathon · Developer Tools** track. Built with NitroStack and TypeScript, with eight focused tools, cited team rules, role-scoped access, and a review evidence widget.
 
 ## The problem
 
@@ -28,7 +28,7 @@ flowchart LR
   MCP --> Audit[Audited call boundary]
   Audit --> Guard[JWT or API key + role config]
   Guard --> Scope[Repository and path allowlist]
-  Scope --> Tools[Seven review tools]
+  Scope --> Tools[Eight review tools]
   Tools --> Data{GitHub adapter}
   Data --> REST[GitHub REST API]
   Data --> Mock[MOCK=1 snapshot]
@@ -47,9 +47,12 @@ flowchart LR
 | `check_pr_against_rules(repo, pr)` | Added-line findings with the rule and original comment; attaches `@Widget('review-card')` |
 | `decision_conflicts(repo, pr)` | Exact reverse-line evidence that a PR undoes a historical fix or revert |
 | `find_reviewers(repo, pr)` | Rank same-path authors and reviewers; return supporting links without notifying anyone |
+| `draft_review(repo, pr)` | Prepare cited inline suggestions from findings and historical conflicts, without posting; return arguments ready for `post_review` |
 | `post_review(repo, pr, body, comments)` | A GitHub `COMMENT` review, guarded by `@UseGuards` and `@RateLimit` |
 
 Review comments use `{ "path": "src/client.ts", "line": 3, "body": "Keep the timeout." }`. Lines refer to added lines on the **right** side of the current PR diff. Posting pins `commit_id`, validates locations, and rejects a head change observed during preparation. `why_line` uses **default-branch** line numbers, which can differ from PR line numbers.
+
+`draft_review` returns a `review` object containing `repo`, `pr`, `body`, `comments`, and `expected_head`. Pass that object to `post_review` after inspecting it. The head check rejects a draft if the PR changes before posting. Drafts preserve docs-bot's empty summary and docs-only comments, report suggestions omitted by the 50-comment/5000-character posting limits, and retain coverage warnings. No findings does not mean approval.
 
 The rule miner supports four conservative families: fetch timeouts, structured logging, stable retry idempotency keys, and Markdown code-fence language tags. It requires review evidence from at least two merged PRs per rule. Confidence is `min(0.95, 0.55 + 0.10 × supporting PRs)`, a support heuristic, **not a calibrated probability**. No additional LLM key or paid inference is required.
 
@@ -105,7 +108,7 @@ To use GitHub, set `MOCK=0`, `GITHUB_TOKEN`, a real role API key or JWT secret, 
 | `repo://rules` | Learned rulebook as JSON for `REPO`, scoped to the verified role |
 | `repo://decisions` | Visible fix/revert PR timeline, oldest first |
 | `audit://log` | Latest 200 entries for the current verified subject **and** role |
-| `review-like-a-senior` | Context → rules and checks → conflicts → reviewers → proposed review / role-appropriate posting |
+| `review-like-a-senior` | Context → rules and checks → conflicts → reviewers → cited draft → role-appropriate posting |
 
 Calls append role, subject, tool, sanitized arguments, allowed/denied and result status to `logs/audit.jsonl`. Review bodies are recorded as length and SHA-256, hidden paths are redacted, and credentials are omitted. Cached calls still traverse authentication and auditing. The built-in widget example resource is also authenticated and filtered by role.
 
@@ -139,22 +142,22 @@ This project provides a deployment bundle; no cloud project has been created or 
 
 1. Run `npm test` and `npm run demo` locally.
 2. Run `npm run pack -- --dry-run`, then `npm run pack`. The CLI creates `pr-archaeologist.zip`, excluding dependencies, build artifacts, `.git`, logs and real `.env` files. Inspect it before uploading; **do not use `--include-env`**. [Official pack reference](https://docs.nitrostack.ai/cli/pack).
-3. Sign in to [NitroCloud](https://nitrostack.ai/cloud), create an MCP server project and choose ZIP upload. Upload that bundle. Git-based deployment is an alternative once you choose to publish a repository; this project has not been pushed. [NitroCloud deployment options](https://nitrostack.ai/cloud).
+3. Sign in to [NitroCloud](https://nitrostack.ai/cloud), create an MCP server project and choose ZIP upload. Upload that bundle. Git-based deployment can use [kshirajahere/pr-archaeologist](https://github.com/kshirajahere/pr-archaeologist). [NitroCloud deployment options](https://nitrostack.ai/cloud).
 4. Use Node 24. Install with `npm ci --include=dev` and `npm --prefix src/widgets ci --include=dev`, build with `npm run build`, and start with `npm start`. Build-time dependencies include the CLI and TypeScript. Keep `dist/`, `src/widgets/out/`, the widget manifest, `config/` and `fixtures/` available at runtime.
 5. For the buildathon demo, set `MOCK=1`, `REPO=acme/launchpad`, `MCP_TRANSPORT_TYPE=http`, `HOST=0.0.0.0`, `PORT` to the platform's assigned port, and `NITRO_MCP_PROTOCOL_VERSION=auto`. Clients send `Bearer demo-readonly` or the other explicit mock credential. Leave `GITHUB_TOKEN` empty.
 6. For real repository use, set `MOCK=0`, supply `GITHUB_TOKEN` and real role credentials in NitroCloud's secret settings, and package your updated role allowlists. Never use a demo credential for live mode.
-7. Check `GET /mcp/health`, connect an MCP client to `https://<your-server>/mcp` with its Authorization header, list seven tools, run the fixture review, and confirm unauthenticated reads and `.env` access fail. Resource and tool HTTP isolation is covered by the local integration test.
+7. Check `GET /mcp/health`, connect an MCP client to `https://<your-server>/mcp` with its Authorization header, list eight tools, run the fixture review, and confirm unauthenticated reads and `.env` access fail. Resource and tool HTTP isolation is covered by the local integration test.
 
 NitroCloud's UI/build settings may evolve; use its current upload flow. The installed CLI's `pack` command is verified locally; this README does not assume unimplemented CLI `login` or `deploy` commands.
 
 ## Evidence and limits
 
 - The fixture is a deliberately fictional, realistic snapshot: PR #207 regresses a timeout, logs and retry key; #208 is a clean docs change; #209 tries to rename a secret into docs. It includes merged PRs, issues, review threads, four recurring conventions and fake `.env`/PEM contents for denial tests.
-- Live GitHub behavior is implemented against REST and tested through an injected HTTP adapter, not a live authenticated repository. GitHub REST has no blame endpoint: provenance walks up to 100 path commits, pins a default-branch snapshot, and stops at merges, renames or missing patches. It reports incomplete evidence instead of inventing a reason.
+- Live GitHub behavior was verified through real MCP stdio on [Pratz1337/strategicwm-Issue PR #2](https://github.com/Pratz1337/strategicwm-Issue/pull/2): all eight tools, three resources and the prompt passed, with posting restricted to a readonly dry run. That repository has no supported recurring rules; this verifies live integration, not detection accuracy. REST adapter edge cases also use injected HTTP tests. GitHub REST has no blame endpoint: provenance walks up to 100 path commits, pins a default-branch snapshot, and stops at merges, renames or missing patches. It reports incomplete evidence instead of inventing a reason.
 - Rules scan up to `n` merged PRs among the latest 3000 closed PRs ordered by update, and up to 300 comments per PR. Related history, decisions and reviewers use up to 100 merged PRs. This is bounded history, not every decision ever made. GitHub's missing/truncated patches and 3000-file PR ceiling constrain coverage.
 - Added-line checks support single-line fetch/retry calls and diff-visible fence state. They are review suggestions, not semantic correctness proofs. Reversed lines identify candidate decision conflicts; a human decides whether the old incident still applies.
 - Cache and rate limits are in memory per process. The JSONL audit is local; for durable cloud audit, set `AUDIT_FILE` to persistent storage or arrange log collection. Autoscaled instances do not share cache or rate counters. Authentication and path restrictions still apply on every call.
-- The production bundle has DOM rendering tests, including source links and HTML escaping. Visual browser QA and the NitroStudio GUI were unavailable in this execution environment. No NitroCloud deployment has been performed.
-- Stage tests and the Git permission blocker are recorded in [CHECKPOINTS.md](CHECKPOINTS.md). The session mounted `.git` read-only, preventing the five requested stage commits. No commits or pushes were made.
+- The production bundle has DOM rendering tests, including source links and HTML escaping. The fixture preview was also visually checked in Chrome at desktop and 390-pixel mobile widths. NitroStudio GUI and NitroCloud deployment remain unverified.
+- Initial stage checks and current verification are recorded in [CHECKPOINTS.md](CHECKPOINTS.md). See [BUILDATHON.md](BUILDATHON.md) for the guide-based demo priorities and remaining submission requirements.
 
 See [DEMO.md](DEMO.md) for the 90-second presentation.

@@ -13,7 +13,7 @@ needed for this recording.
 | 28–44s | Run `extract_team_rules`, then `check_pr_against_rules`. Open the review card and point to the first source link. | “It finds four recurring rules. This one quotes a review from October 2024, two years earlier. Each flag connects the changed line to the original comment, with its source and confidence.” |
 | 44–57s | Run `decision_conflicts` for PR 207. Highlight the removed timeout and restored fetch call. | “The new PR exactly reverses the fix from #42. This is evidence of a possible regression, with the old fix linked for the reviewer.” |
 | 57–68s | Run `find_reviewers`. Highlight Nikhil's score and evidence URLs. | “It suggests the people who changed or reviewed these exact paths. Nikhil authored the relevant fixes.” |
-| 68–79s | Show `post_review` dry-run output from the prompt or `npm run demo`. | “Readonly can prepare the review but cannot publish it. Reviewer can post. Docs-bot can only leave inline comments under docs.” |
+| 68–79s | Run `draft_review`, show its cited comments and `expected_head`, then pass its `review` to `post_review` for a dry run. | “The evidence becomes an inspectable review. The draft is pinned to this PR version. Readonly cannot publish it; a changed PR rejects the stale draft.” |
 | 79–90s | Run `why_line` for `.env`, line 1. Show `not found`, then `audit://log`. | “Ask this agent for dot-env: not found. The denied call is audited. Review with the team's memory, inside the agent's role.” |
 
 The “before” is illustrative, not an asserted model benchmark. Keep the fixture
@@ -35,7 +35,7 @@ Useful inputs:
 {"repo":"acme/launchpad","path":".env","line":1}
 ```
 
-For a manual dry run:
+For a manual dry run, call `draft_review` with the PR input above, inspect the returned `review`, and pass that exact object to `post_review`. To write your own comments instead:
 
 ```json
 {

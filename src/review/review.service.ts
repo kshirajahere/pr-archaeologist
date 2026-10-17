@@ -38,8 +38,31 @@ export class ReviewService {
       method: 'Same-path merged PR authors (2 points) and reviewers (1 point); up to 100 merged PRs by update. Excludes current author and bot accounts. PR review participation is a path-expertise proxy.' };
   }
 
-  async post(repo: string, pr: number, input: ReviewInput, role: Role) {
+  async draft(repo: string, pr: number, role: Role) {
     const pull = await this.github.pull(repo, pr);
+    const check = await this.check(repo, pr, role);
+    const conflicts = await this.conflicts(repo, pr, role);
+    if ((await this.github.pull(repo, pr)).head.sha !== pull.head.sha) throw new Error('PR changed; refresh context and review the new head');
+    const suggestions = [
+      ...check.findings.map(f => ({ path: f.path, line: f.line,
+        body: `${f.rule}\n\n> ${f.source.quote.replace(/\n/g, '\n> ')}\n\nSource: ${f.source.url}` })),
+      ...conflicts.conflicts.map(c => ({ path: c.path, line: c.line,
+        body: `${c.warning}\n\n> ${c.source.quote.replace(/\n/g, '\n> ')}\n\nSource: ${c.source.url}\nHistorical fix: ${c.url}` }))
+    ];
+    const comments = suggestions.filter(c => c.body.length <= 5000).slice(0, 50);
+    const omitted = suggestions.length - comments.length;
+    const body = role.post === 'docs-only' ? '' : [
+      suggestions.length ? `${suggestions.length} evidence-backed review suggestions; ${comments.length} inline comments prepared. Original sources accompany included comments.` : 'No supported rule violations or decision conflicts found.',
+      'Continue manual review: these checks do not establish correctness.',
+      ...(omitted ? [`${omitted} ${omitted === 1 ? 'suggestion' : 'suggestions'} omitted due to posting limits.`] : [])
+    ].join('\n\n');
+    return { repo, pr, posted: false, review: { repo, pr, body, comments, expected_head: pull.head.sha }, omitted_comments: omitted,
+      unchecked_paths: check.unchecked_paths, coverage: `${check.coverage}\n${conflicts.coverage}` };
+  }
+
+  async post(repo: string, pr: number, input: ReviewInput, role: Role, expectedHead?: string) {
+    const pull = await this.github.pull(repo, pr);
+    if (expectedHead && pull.head.sha !== expectedHead) throw new Error('PR changed; refresh context and review the new head');
     const files = (await this.github.files(repo, pr)).filter(f => visibleFile(role, f));
     if (safeText(role, input.body) !== input.body) throw new Error('not found');
     if (role.post === 'docs-only' && (input.body.trim() || !input.comments.length)) throw new Error('not found');

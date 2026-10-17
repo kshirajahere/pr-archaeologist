@@ -14,7 +14,8 @@ test('real stdio server discovers tools and returns context and provenance', asy
     await client.connect(transport);
     const list = await client.listTools();
     assert.ok(list.tools.some(t => t.name === 'pr_context'));
-    assert.equal(list.tools.length, 7);
+    assert.equal(list.tools.length, 8);
+    assert.equal(list.tools.find(t => t.name === 'draft_review').annotations.readOnlyHint, true);
     for (const [name, args] of [['pr_context', { repo: 'acme/launchpad', pr: 207 }], ['why_line', { repo: 'acme/launchpad', path: 'src/client.ts', line: 3 }]]) {
       const result = await client.callTool({ name, arguments: args });
       assert.equal(result.isError, undefined, JSON.stringify(result));
@@ -24,6 +25,17 @@ test('real stdio server discovers tools and returns context and provenance', asy
       const result = await client.callTool({ name, arguments: { repo: 'acme/launchpad', pr: 207 } });
       assert.equal(result.isError, undefined, JSON.stringify(result));
     }
+    const draftResult = await client.callTool({ name: 'draft_review', arguments: { repo: 'acme/launchpad', pr: 207 } });
+    assert.equal(draftResult.isError, undefined, JSON.stringify(draftResult));
+    const draft = draftResult.structuredContent ?? JSON.parse(draftResult.content.find(c => c.type === 'text').text);
+    assert.equal(draft.posted, false);
+    const dryRun = await client.callTool({ name: 'post_review', arguments: draft.review });
+    assert.equal(dryRun.isError, undefined, JSON.stringify(dryRun));
+    const dryRunData = dryRun.structuredContent ?? JSON.parse(dryRun.content.find(c => c.type === 'text').text);
+    assert.equal(dryRunData.dry_run, true);
+    const stale = await client.callTool({ name: 'post_review', arguments: { ...draft.review, expected_head: 'old-head' } });
+    assert.equal(stale.isError, true);
+    assert.match(JSON.stringify(stale), /PR changed/);
     const denied = await client.callTool({ name: 'why_line', arguments: { repo: 'acme/launchpad', path: '.env', line: 1 } });
     assert.equal(denied.isError, true);
     assert.match(JSON.stringify(denied), /not found/);

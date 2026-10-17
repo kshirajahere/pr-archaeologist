@@ -18,13 +18,21 @@ export class ReviewTools {
     return this.service.reviewers(input.repo, input.pr, roleFor(ctx, input.repo));
   }
 
-  @Tool({ name: 'post_review', description: 'Submit a GitHub COMMENT review with a summary and right-side comments on added lines. reviewer may post; readonly returns a dry run; docs-bot requires an empty summary and comments only under docs/. Rate limited to five calls per minute per identity. Show the proposed review to the user before calling; in MOCK=1 writes stay in memory.',
+  @Tool({ name: 'draft_review', description: 'Prepare an evidence-backed review from supported rule findings and historical decision conflicts, without posting. Returns review arguments for post_review, including expected_head to reject stale drafts. Preserves role scope and docs-only summary restrictions. Show the exact draft to the user before posting; report omitted comments and coverage limits.',
+    annotations: { readOnlyHint: true, destructiveHint: false },
+    inputSchema: z.object({ repo: repoSchema, pr: prSchema }) })
+  @UseGuards(RoleGuard)
+  async draft(input: { repo: string; pr: number }, ctx: ExecutionContext) {
+    return this.service.draft(input.repo, input.pr, roleFor(ctx, input.repo));
+  }
+
+  @Tool({ name: 'post_review', description: 'Submit a GitHub COMMENT review with a summary and right-side comments on added lines. Supply expected_head from draft_review to reject a stale draft. reviewer may post; readonly returns a dry run; docs-bot requires an empty summary and comments only under docs/. Rate limited to five calls per minute per identity. Show the proposed review to the user before calling; in MOCK=1 writes stay in memory.',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-    inputSchema: z.object({ repo: repoSchema, pr: prSchema, body: z.string().max(20000), comments: z.array(z.object({ path: z.string().min(1), line: z.number().int().min(1), body: z.string().min(1).max(5000) })).max(50) }) })
+    inputSchema: z.object({ repo: repoSchema, pr: prSchema, body: z.string().max(20000), comments: z.array(z.object({ path: z.string().min(1), line: z.number().int().min(1), body: z.string().min(1).max(5000) })).max(50), expected_head: z.string().min(1).optional() }) })
   @UseGuards(RoleGuard)
   @RateLimit({ requests: 5, window: '1m', key: ctx => ctx.auth?.subject ?? 'anonymous' })
-  async post(input: ReviewInput & { repo: string; pr: number }, ctx: ExecutionContext) {
-    return this.service.post(input.repo, input.pr, { body: input.body, comments: input.comments }, roleFor(ctx, input.repo));
+  async post(input: ReviewInput & { repo: string; pr: number; expected_head?: string }, ctx: ExecutionContext) {
+    return this.service.post(input.repo, input.pr, { body: input.body, comments: input.comments }, roleFor(ctx, input.repo), input.expected_head);
   }
 
   @Tool({ name: 'extract_team_rules', description: 'Learn recurring team conventions from review comments on up to n recent merged PRs (default 300). Return only patterns supported by at least two PRs, with verbatim source quotes, links and heuristic confidence. Cached five minutes per repository and role scope.',

@@ -32,16 +32,25 @@ test('production HTTP authenticates tools and resources; identities remain isola
       }));
       const args = { repo: 'acme/launchpad', pr: 207 };
       const result = await client.callTool({ name: 'pr_context', arguments: args });
+      const draftResult = await client.callTool({ name: 'draft_review', arguments: args });
       if (!key) {
         assert.equal(result.isError, true);
+        assert.equal(draftResult.isError, true);
         await assert.rejects(client.readResource({ uri: 'repo://rules' }), /not found/);
         continue;
       }
       assert.equal(result.isError, undefined, JSON.stringify(result));
+      assert.equal(draftResult.isError, undefined, JSON.stringify(draftResult));
+      const draft = draftResult.structuredContent ?? JSON.parse(draftResult.content.find(c => c.type === 'text').text);
+      assert.equal(draft.posted, false);
+      assert.equal(draft.review.expected_head, 'head207');
       const rules = await client.readResource({ uri: 'repo://rules' });
       const data = JSON.parse(rules.contents[0].text);
       assert.equal(data.rules.length, key === 'demo-docs-bot' ? 1 : 4);
       if (key === 'demo-docs-bot') {
+        assert.equal(draft.review.body, '');
+        assert.ok(draft.review.comments.every(c => c.path.startsWith('docs/')));
+        assert.doesNotMatch(JSON.stringify(draft), /src\/client/);
         assert.doesNotMatch(JSON.stringify(result), /src\/client/);
         const examples = await client.readResource({ uri: 'widget://examples' });
         assert.doesNotMatch(JSON.stringify(examples), /src\/client/);

@@ -1,9 +1,9 @@
 # Stage checkpoints
 
-The session policy mounts the existing `.git` directory read-only. Stage 1's
+During the initial build, the session policy mounted `.git` read-only. Stage 1's
 `git add` and `git commit` both failed creating `.git/index.lock` (permission
-denied). No commits or pushes have been made. Checkpoints below record verified
-stages; the five requested commits remain blocked by that policy.
+denied). The checkpoints below preserve that initial build history. The current
+workspace permits Git writes; the initial implementation is commit `440df68`.
 
 1. Scaffold, `pr_context`, `why_line`: `npm test` — 8/8 passed; TypeScript build
    passed; real stdio MCP discovery and both tool calls passed.
@@ -46,3 +46,23 @@ stages; the five requested commits remain blocked by that policy.
 NitroStack 1.1.2 starts a referenced cleanup interval on import. Tests use Node's
 `--test-force-exit --test-isolation=none` after completing assertions. MCP child
 processes are explicitly closed.
+
+## 2026-10-17 verification and review drafts
+
+- Public repository created under `kshirajahere/pr-archaeologist`.
+- Baseline: 31/31 tests passed. Added five draft tests, observed all five fail
+  before implementation, then implemented `draft_review` and stale-draft checks.
+- Final `npm test`: 36/36 passed, including production build, both TypeScript
+  projects, stdio, HTTP, authentication, role scope, audit and widget DOM checks.
+- `npm run demo`: eight tools complete the fixture flow, producing five cited
+  draft comments and a readonly dry run. No live GitHub review was published.
+- Real GitHub MCP smoke check on `Pratz1337/strategicwm-Issue` PR #2: all eight
+  tools, three project resources and the prompt passed. Line provenance returned
+  a real introduction commit; no supported recurring rules were found. Posting
+  remained a readonly dry run. Temporary credentials were kept in process memory.
+- Chrome visual inspection: fixture preview at desktop and 390-pixel mobile
+  widths, four findings and original source links. Screenshots and test output
+  are in local ignored `logs/`.
+- NitroCloud reached its sign-in screen. NitroStudio GUI and a deployed remote
+  MCP endpoint remain unverified. The guide-based remaining work is in
+  `BUILDATHON.md`.
