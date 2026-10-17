@@ -1,0 +1,5 @@
+{
+  "readonly": { "apiKeyEnv": "READONLY_API_KEY", "repos": ["acme/launchpad"], "allow": ["src/", "docs/", "README.md"], "post": "dry-run" },
+  "reviewer": { "apiKeyEnv": "REVIEWER_API_KEY", "repos": ["acme/launchpad"], "allow": ["src/", "docs/", "README.md"], "post": "review" },
+  "docs-bot": { "apiKeyEnv": "DOCS_BOT_API_KEY", "repos": ["acme/launchpad"], "allow": ["docs/"], "post": "docs-only" }
+}

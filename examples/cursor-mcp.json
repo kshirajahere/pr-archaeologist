@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pr-archaeologist": {
+      "command": "node",
+      "args": ["C:/Users/sayal/pr-archaeologist/scripts/mcp.mjs"],
+      "env": {
+        "MOCK": "1",
+        "REPO": "acme/launchpad",
+        "MCP_API_KEY": "demo-readonly",
+        "NITRO_MCP_PROTOCOL_VERSION": "legacy"
+      }
+    }
+  }
+}

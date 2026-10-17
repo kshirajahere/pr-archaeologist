@@ -1,0 +1,42 @@
+{
+  "name": "pr-archaeologist",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Evidence-backed GitHub PR review with role-scoped memory",
+  "scripts": {
+    "dev": "nitrostack-cli dev",
+    "build": "nitrostack-cli build && node scripts/style-widgets.mjs && npm run check:widgets",
+    "start": "node dist/index.js",
+    "build:server": "tsc",
+    "test": "npm run build && node --test --test-force-exit --test-isolation=none tests/*.test.mjs",
+    "check:widgets": "tsc --noEmit -p src/widgets/tsconfig.json",
+    "demo": "node scripts/demo.mjs",
+    "widget:example": "npm run build:server && node scripts/widget-example.mjs",
+    "start:prod": "nitrostack-cli start",
+    "upgrade": "nitrostack-cli upgrade",
+    "install:all": "nitrostack-cli install",
+    "widget": "npm --prefix src/widgets",
+    "pack": "nitrostack-cli pack"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.0.0",
+    "@nitrostack/core": "^1",
+    "dotenv": "^16.3.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@nitrostack/cli": "^1",
+    "@types/node": "^22.10.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.3.3"
+  },
+  "author": "Pratz",
+  "nitrostack": {
+    "skillsVersion": "1.0.0"
+  }
+}

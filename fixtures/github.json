@@ -1,0 +1,421 @@
+{
+  "repo": "acme/launchpad",
+  "pulls": [
+    {
+      "number": 75,
+      "title": "Document payment retry examples",
+      "body": "",
+      "html_url": "https://github.com/acme/launchpad/pull/75",
+      "user": {
+        "login": "mina"
+      },
+      "merged_at": "2026-06-10T18:00:00Z",
+      "head": {
+        "sha": "head75"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 61,
+      "title": "Fix retry idempotency",
+      "body": "",
+      "html_url": "https://github.com/acme/launchpad/pull/61",
+      "user": {
+        "login": "nikhil"
+      },
+      "merged_at": "2025-04-02T18:00:00Z",
+      "head": {
+        "sha": "head61"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 58,
+      "title": "Fix bounded upstream calls",
+      "body": "",
+      "html_url": "https://github.com/acme/launchpad/pull/58",
+      "user": {
+        "login": "ava"
+      },
+      "merged_at": "2025-01-10T18:00:00Z",
+      "head": {
+        "sha": "head58"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 42,
+      "title": "Fix upstream requests hanging forever",
+      "body": "Fixes #41",
+      "html_url": "https://github.com/acme/launchpad/pull/42",
+      "user": {
+        "login": "nikhil"
+      },
+      "merged_at": "2024-10-17T18:00:00Z",
+      "head": {
+        "sha": "head42"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 207,
+      "title": "Simplify upstream client",
+      "body": "Fixes #201",
+      "html_url": "https://github.com/acme/launchpad/pull/207",
+      "user": {
+        "login": "leo"
+      },
+      "merged_at": null,
+      "head": {
+        "sha": "head207"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 208,
+      "title": "Clarify setup docs",
+      "body": "",
+      "html_url": "https://github.com/acme/launchpad/pull/208",
+      "user": {
+        "login": "leo"
+      },
+      "merged_at": null,
+      "head": {
+        "sha": "head208"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    },
+    {
+      "number": 209,
+      "title": "Move deployment credentials",
+      "body": "",
+      "html_url": "https://github.com/acme/launchpad/pull/209",
+      "user": {
+        "login": "leo"
+      },
+      "merged_at": null,
+      "head": {
+        "sha": "head209"
+      },
+      "base": {
+        "sha": "base206",
+        "ref": "main"
+      }
+    }
+  ],
+  "files": {
+    "42": [
+      {
+        "filename": "src/client.ts",
+        "status": "modified",
+        "patch": "@@ -1,6 +1,6 @@\n export async function load(url: string, key: string) {\n   // Bound upstream stalls; see incident #41.\n-  const response = await fetch(url);\n+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n   logger.info({ status: response.status }, \"upstream response\");\n   return retry(() => charge(key));\n }"
+      }
+    ],
+    "58": [
+      {
+        "filename": "src/health.ts",
+        "status": "modified",
+        "patch": "@@ -1,4 +1,4 @@\n export async function health() {\n-  const response = await fetch(url);\n+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n-  console.log(response.status);\n+  logger.info({ status: response.status }, \"upstream response\");\n }"
+      }
+    ],
+    "61": [
+      {
+        "filename": "src/client.ts",
+        "status": "modified",
+        "patch": "@@ -5 +5 @@\n-  return charge(key);\n+  return retry(() => charge(key));"
+      },
+      {
+        "filename": "docs/review-guide.md",
+        "status": "modified",
+        "patch": "@@ -1,4 +1,4 @@\n # Review guide\n-```\n+```sh\n npm run retry-example\n ```"
+      }
+    ],
+    "75": [
+      {
+        "filename": "docs/review-guide.md",
+        "status": "modified",
+        "patch": "@@ -1,4 +1,4 @@\n # Review guide\n-```\n+```sh\n npm run retry-example\n ```"
+      },
+      {
+        "filename": ".env",
+        "status": "modified",
+        "patch": "@@ -1 +1 @@\n-TOKEN=old\n+TOKEN=FIXTURE_SECRET_NEVER_RETURN"
+      }
+    ],
+    "207": [
+      {
+        "filename": "src/client.ts",
+        "status": "modified",
+        "patch": "@@ -1,6 +1,6 @@\n export async function load(url: string, key: string) {\n   // Bound upstream stalls; see incident #41.\n-  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n-  logger.info({ status: response.status }, \"upstream response\");\n-  return retry(() => charge(key));\n+  const response = await fetch(url);\n+  console.log(response.status);\n+  return retry(() => charge(crypto.randomUUID()));\n }"
+      },
+      {
+        "filename": "docs/setup.md",
+        "status": "modified",
+        "patch": "@@ -1,3 +1,3 @@\n # Setup\n-```sh\n+```\n npm install"
+      },
+      {
+        "filename": ".env",
+        "status": "modified",
+        "patch": "@@ -1 +1 @@\n-TOKEN=old\n+TOKEN=FIXTURE_SECRET_NEVER_RETURN"
+      },
+      {
+        "filename": "secrets/service.pem",
+        "status": "added",
+        "patch": "@@ -0,0 +1 @@\n+FIXTURE_PRIVATE_KEY"
+      }
+    ],
+    "208": [
+      {
+        "filename": "docs/setup.md",
+        "status": "modified",
+        "patch": "@@ -1 +1 @@\n-# Setup\n+# Local setup"
+      }
+    ],
+    "209": [
+      {
+        "filename": "docs/credentials.md",
+        "status": "renamed",
+        "patch": "@@ -0,0 +1 @@\n+FIXTURE_SECRET_NEVER_RETURN",
+        "previous_filename": ".env"
+      }
+    ]
+  },
+  "comments": {
+    "42": [
+      {
+        "id": 4201,
+        "body": "Always set an explicit timeout on fetch calls. Keep AbortSignal.timeout(5000): without it an upstream stall holds a worker forever. This fixes incident #41.",
+        "path": "src/client.ts",
+        "line": 3,
+        "original_line": 3,
+        "commit_id": "fix42",
+        "html_url": "https://github.com/acme/launchpad/pull/42#discussion_r4201",
+        "created_at": "2024-10-17T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 4202,
+        "body": "Use the structured logger; never console.log in server code.",
+        "path": "src/client.ts",
+        "line": 4,
+        "original_line": 4,
+        "commit_id": "fix42",
+        "html_url": "https://github.com/acme/launchpad/pull/42#discussion_r4202",
+        "created_at": "2024-10-17T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      }
+    ],
+    "58": [
+      {
+        "id": 5801,
+        "body": "Always set an explicit timeout on fetch calls so upstream stalls cannot exhaust workers.",
+        "path": "src/health.ts",
+        "line": 2,
+        "original_line": 2,
+        "commit_id": "head58",
+        "html_url": "https://github.com/acme/launchpad/pull/58#discussion_r5801",
+        "created_at": "2025-01-10T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 5802,
+        "body": "Use the structured logger; never console.log in server code.",
+        "path": "src/health.ts",
+        "line": 3,
+        "original_line": 3,
+        "commit_id": "head58",
+        "html_url": "https://github.com/acme/launchpad/pull/58#discussion_r5802",
+        "created_at": "2025-01-10T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      }
+    ],
+    "61": [
+      {
+        "id": 6101,
+        "body": "Keep the same idempotency key across retries; never generate randomUUID inside a retry callback.",
+        "path": "src/client.ts",
+        "line": 5,
+        "original_line": 5,
+        "commit_id": "head61",
+        "html_url": "https://github.com/acme/launchpad/pull/61#discussion_r6101",
+        "created_at": "2025-04-02T10:30:00Z",
+        "user": {
+          "login": "mina"
+        }
+      },
+      {
+        "id": 6102,
+        "body": "Always give fenced code blocks a language tag for accessible syntax highlighting.",
+        "path": "docs/review-guide.md",
+        "line": 2,
+        "original_line": 2,
+        "commit_id": "head61",
+        "html_url": "https://github.com/acme/launchpad/pull/61#discussion_r6102",
+        "created_at": "2025-04-02T10:30:00Z",
+        "user": {
+          "login": "mina"
+        }
+      }
+    ],
+    "75": [
+      {
+        "id": 7501,
+        "body": "Reuse the same idempotency key across retries; no randomUUID in retry callbacks.",
+        "path": "docs/review-guide.md",
+        "line": 3,
+        "original_line": 3,
+        "commit_id": "head75",
+        "html_url": "https://github.com/acme/launchpad/pull/75#discussion_r7501",
+        "created_at": "2026-06-10T10:30:00Z",
+        "user": {
+          "login": "mina"
+        }
+      },
+      {
+        "id": 7502,
+        "body": "Always give fenced code blocks a language tag, such as sh.",
+        "path": "docs/review-guide.md",
+        "line": 2,
+        "original_line": 2,
+        "commit_id": "head75",
+        "html_url": "https://github.com/acme/launchpad/pull/75#discussion_r7502",
+        "created_at": "2026-06-10T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      },
+      {
+        "id": 7503,
+        "body": "SECRET_RULE_MUST_NOT_APPEAR: use FIXTURE_SECRET_NEVER_RETURN",
+        "path": ".env",
+        "line": 1,
+        "original_line": 1,
+        "commit_id": "head75",
+        "html_url": "https://github.com/acme/launchpad/pull/75#discussion_r7503",
+        "created_at": "2026-06-10T10:30:00Z",
+        "user": {
+          "login": "ava"
+        }
+      }
+    ]
+  },
+  "reviews": {
+    "42": [
+      {
+        "user": {
+          "login": "ava"
+        },
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/launchpad/pull/42#pullrequestreview-42"
+      }
+    ],
+    "58": [
+      {
+        "user": {
+          "login": "ava"
+        },
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/launchpad/pull/58#pullrequestreview-58"
+      }
+    ],
+    "61": [
+      {
+        "user": {
+          "login": "mina"
+        },
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/launchpad/pull/61#pullrequestreview-61"
+      }
+    ],
+    "75": [
+      {
+        "user": {
+          "login": "ava"
+        },
+        "state": "APPROVED",
+        "html_url": "https://github.com/acme/launchpad/pull/75#pullrequestreview-75"
+      }
+    ]
+  },
+  "commits": [
+    {
+      "sha": "fix42",
+      "html_url": "https://github.com/acme/launchpad/commit/fix42",
+      "commit": {
+        "message": "Fix upstream stalls by bounding requests (#42)",
+        "author": {
+          "name": "Nikhil",
+          "date": "2024-10-17T10:00:00Z"
+        }
+      },
+      "author": {
+        "login": "nikhil"
+      },
+      "parents": [
+        {
+          "sha": "before42"
+        }
+      ],
+      "files": [
+        {
+          "filename": "src/client.ts",
+          "status": "modified",
+          "patch": "@@ -1,6 +1,6 @@\n export async function load(url: string, key: string) {\n   // Bound upstream stalls; see incident #41.\n-  const response = await fetch(url);\n+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n   logger.info({ status: response.status }, \"upstream response\");\n   return retry(() => charge(key));\n }"
+        }
+      ]
+    }
+  ],
+  "commitPulls": {
+    "fix42": [
+      42
+    ]
+  },
+  "issues": [
+    {
+      "number": 41,
+      "title": "Workers hang during upstream outage",
+      "body": "An unbounded fetch exhausted all workers. Requests must time out after five seconds.",
+      "html_url": "https://github.com/acme/launchpad/issues/41"
+    },
+    {
+      "number": 201,
+      "title": "Simplify client code",
+      "body": "Reduce client boilerplate while keeping incident protections.",
+      "html_url": "https://github.com/acme/launchpad/issues/201"
+    }
+  ],
+  "contents": {
+    "src/client.ts": "export async function load(url: string, key: string) {\n  // Bound upstream stalls; see incident #41.\n  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });\n  logger.info({ status: response.status }, \"upstream response\");\n  return retry(() => charge(key));\n}\n",
+    "docs/setup.md": "# Setup\n```sh\nnpm install\n```\n",
+    "README.md": "# Launchpad\nSee docs/review-guide.md for review policy.",
+    "docs/review-guide.md": "# Review guide\nBound upstream calls. Keep retry keys stable. Use structured logs. Label code fences.",
+    ".env": "TOKEN=FIXTURE_SECRET_NEVER_RETURN",
+    "secrets/service.pem": "FIXTURE_PRIVATE_KEY"
+  }
+}
